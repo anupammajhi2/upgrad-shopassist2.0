@@ -23,7 +23,7 @@
         </div>
         <div class="inputcontainer">
             <form action="/conversation" method="POST" class="inputform">
-                <input type="text" name="user_input_message" class="inputtextbox" placeholder="Type here...">
+                <input type="text" name="user_input_message" class="inputtextbox" placeholder="Type here..." required>
                 <button type="submit" class="submitbutton"></button>
             </form>
             <form action="/end_conversation" method="POST" class="endform">
@@ -31,12 +31,77 @@
             </form>
         </div>
     </div>
+    <div id="flaggedPopup" class="popup-overlay">
+        <div class="popup-content">
+            <div class="popup-message">
+                Sorry, this message has been flagged for inappropriate content.
+            </div>
+            <div class="popup-countdown">
+                Redirecting to restart conversation in <span id="countdown">3</span> seconds...
+            </div>
+        </div>
+    </div>
     <script>
         function scrollToBottom() {
             var chatContainer = document.getElementById('chatcontainer');
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
-        window.onload = scrollToBottom;
+        function showFlaggedPopup() {
+            const popup = document.getElementById('flaggedPopup');
+            const countdownElement = document.getElementById('countdown');
+            let countdown = 10;
+            
+            popup.style.display = 'block';
+
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                countdownElement.textContent = countdown;
+                
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    window.location.href = '/end_conversation';
+                }
+            }, 1000);
+        }
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('flagged') === 'true') {
+            showFlaggedPopup();
+        } else {
+            window.onload = scrollToBottom;
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('.inputform');
+            const input = document.querySelector('.inputtextbox');
+            const submitButton = document.querySelector('.submitbutton');
+            
+            form.addEventListener('submit', function(e) {
+                const message = input.value.trim();
+                if (!message) {
+                    e.preventDefault();
+                    return;
+                }
+                
+                const messageValue = message;
+                
+                const chatContainer = document.getElementById('chatcontainer');
+                const userDiv = document.createElement('div');
+                userDiv.className = 'user';
+                userDiv.textContent = messageValue;
+                chatContainer.appendChild(userDiv);
+                
+                // Add typing indicator
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'bot typing-indicator';
+                typingDiv.id = 'typing-temp';
+                typingDiv.innerHTML = '<span class="typing-dots">Assistant is typing<span class="dots">...</span></span>';
+                chatContainer.appendChild(typingDiv);
+                
+                scrollToBottom();
+                
+                submitButton.disabled = true;
+                submitButton.style.opacity = '0.5';
+            });
+        });
     </script>
 </body>
 </html>

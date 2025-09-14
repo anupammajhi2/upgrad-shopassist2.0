@@ -1,3 +1,4 @@
 OpenAI_API_Key.txt
 .qodo
 venv
+__pycache__/

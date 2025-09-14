@@ -5,7 +5,7 @@ ShopAssist with function calling
 - Python 3.9 and above
 - venv (optional)
 - OpenAI API Key
-    - IMPORTANT! Create a text file named 'OpenAI_API_Key.txt' and add your OpenAI API key to it
+    - IMPORTANT! Create a text file named 'OpenAI_API_Key.txt' and add your OpenAI API key to it OR save it as an environment variable OPENAI_API_KEY
 
 ### Getting Started
 
