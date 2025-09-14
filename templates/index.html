@@ -46,6 +46,13 @@
             var chatContainer = document.getElementById('chatcontainer');
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
+
+        function focusInput() {
+        var inputBox = document.querySelector('.inputtextbox');
+        if (inputBox) {
+            inputBox.focus();
+        }
+    }
         function showFlaggedPopup() {
             const popup = document.getElementById('flaggedPopup');
             const countdownElement = document.getElementById('countdown');
@@ -67,12 +74,17 @@
         if (urlParams.get('flagged') === 'true') {
             showFlaggedPopup();
         } else {
-            window.onload = scrollToBottom;
+            window.onload = function() {
+                scrollToBottom();
+                focusInput();
+            };
         }
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.querySelector('.inputform');
             const input = document.querySelector('.inputtextbox');
             const submitButton = document.querySelector('.submitbutton');
+            
+            focusInput();
             
             form.addEventListener('submit', function(e) {
                 const message = input.value.trim();

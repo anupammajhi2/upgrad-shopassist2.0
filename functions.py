@@ -26,16 +26,17 @@ def initialize_conversation():
     system_message = f"""
     You are an intelligent laptop gadget expert and your goal is to find the best laptop for a user.
     You need to ask relevant questions and understand the user profile by analysing the user's responses.
-    You final objective is to fill the values for the different keys ('GPU intensity','Display quality','Portability','Multitasking','Processing speed','Budget') in the python dictionary and be confident of the values.
+    You final objective is to find the values for the different keys ('GPU intensity','Display quality','Portability','Multitasking','Processing speed','Budget') in the python dictionary and be confident of the values.
     These key value pairs define the user's profile.
     The python dictionary looks like this
     {{'GPU intensity': 'values','Display quality': 'values','Portability': 'values','Multitasking': 'values','Processing speed': 'values','Budget': 'values'}}
     The value for 'Budget' should be a numerical value extracted from the user's response.
     The values for all keys, except 'Budget', should be 'low', 'medium', or 'high' based on the importance of the corresponding keys, as stated by user.
     All the values in the example dictionary are only representative values.
+    Do not talk about how and what you are doing with the dictionary, just keep that for your information.
     {delimiter}
     Here are some instructions around the values for the different keys. If you do not follow this, you'll be heavily penalised:
-    - The values for all keys, except 'Budget', should strictly be either 'low', 'medium', or 'high' based on the importance of the corresponding keys, as stated by user.
+    - The values for all keys, except 'Budget', should strictly be either 'low', 'medium', or 'high' based on the importance of the corresponding keys, as stated by user, or marked low if users say they are not really sure.
     - The value for 'Budget' should be a numerical value extracted from the user's response.
     - 'Budget' value needs to be greater than or equal to 25000 INR. If the user says less than that, please mention that there are no laptops in that range.
     - Do not randomly assign values to any of the keys.
@@ -64,6 +65,7 @@ def initialize_conversation():
     {delimiter}
     Thought 3: Check if you have correctly updated the values for the different keys in the python dictionary.
     If you are not confident about any of the values, ask clarifying questions.
+    If user is not very sure about a particular key, mark that particular priority as low or based on your judgement.
     {delimiter}
 
     {delimiter}
@@ -85,34 +87,14 @@ def initialize_conversation():
     conversation = [{"role": "system", "content": system_message}]
     return conversation
 
-def get_chat_completions(input, json_format = False):
-    MODEL = 'gpt-3.5-turbo'
-
-    system_message_json_output = """<<. Return output in JSON format to the key output.>>"""
-
-    # If the output is required to be in JSON format
-    if json_format == True:
-        # Append the input prompt to include JSON response as specified by OpenAI
-        input[0]['content'] += system_message_json_output
-
-        # JSON return type specified
-        chat_completion_json = openai.chat.completions.create(
-            model = MODEL,
-            messages = input,
-            response_format = { "type": "json_object"},
-            seed = 1234)
-
-        output = json.loads(chat_completion_json.choices[0].message.content)
-    else:
-        chat_completion = openai.chat.completions.create(
-            model = MODEL,
-            messages = input,
-            seed = 2345)
-
-        output = chat_completion.choices[0].message.content
-
-    return output
-
+def get_chat_completions(messages, json_format = False):
+    response = openai.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        #temperature=0, # this is the degree of randomness of the model's output
+        #max_tokens = 300
+    )
+    return response.choices[0].message.content
 def intent_confirmation_layer(response_assistant):
 
     delimiter = "####"
@@ -170,7 +152,7 @@ def dictionary_present(response):
             The output should match the format as {user_req}.
 
             {delimiter}
-            Make sure that the value of budget is also present in the user input. ###
+            Make sure that the value of budget is also present in the user input.
             The output should contain the exact keys and values as present in the input.
             Ensure the keys and values are in the given format:
             {{
@@ -200,13 +182,93 @@ def dictionary_present(response):
 
     return confirmation
 
-def compare_laptops_with_user(user_req_string):
+shopassist_custom_functions = [
+    {
+        'name': 'extract_user_info',
+        'description': 'Get the user laptop information from the body of the input text',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'GPU intensity': {
+                    'type': 'string',
+                    'description': 'GPU intensity of the user requested laptop. The values  are ''low'', ''medium'', or ''high'' based on the importance of the corresponding keys, as stated by user'
+                },
+                'Display quality': {
+                    'type': 'string',
+                    'description': 'Display quality of the user requested laptop. The values  are ''low'', ''medium'', or ''high'' based on the importance of the corresponding keys, as stated by user'
+                },
+                'Portability': {
+                    'type': 'string',
+                    'description': 'The portability of the user requested laptop. The values  are ''low'', ''medium'', or ''high'' based on the importance of the corresponding keys, as stated by user'
+                },
+                'Multitasking': {
+                    'type': 'string',
+                    'description': 'The multitasking abiliy of the user requested laptop. The values  are ''low'', ''medium'', or ''high'' based on the importance of the corresponding keys, as stated by user'
+                },
+                'Processing speed': {
+                    'type': 'string',
+                    'description': 'The processing speed of the user requested laptop.  The values  are ''low'', ''medium'', or ''high'' based on the importance of the corresponding keys, as stated by user'
+                },
+                'Budget': {
+                    'type': 'integer',
+                    'description': 'The budget of the user requested laptop. The values are integers.'
+                }
+            }
+        }
+    }
+]
+def get_chat_completions_func_calling(input, include_budget = False):
+  final_message = [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": input}
+    ]
+
+  completion = openai.chat.completions.create(
+    model = "gpt-3.5-turbo",
+    messages = final_message,
+    functions = shopassist_custom_functions,
+    function_call = 'auto'
+  )
+  function_parameters = json.loads(completion.choices[0].message.function_call.arguments)
+  budget = 0
+  if include_budget:
+      budget = function_parameters['Budget']
+
+  return extract_user_info(function_parameters['GPU intensity'], function_parameters['Display quality'], function_parameters['Portability'], function_parameters['Multitasking'],
+                                       function_parameters['Processing speed'], budget)
+
+# The local function that we have written to extract the laptop information for user
+def extract_user_info(GPU_intensity, Display_quality, Portability, Multitasking, Processing_speed, Budget):
+    """
+
+    Parameters:
+    GPU_intensity (str): GPU intensity required by the user.
+    Display_quality (str): Display quality required by the user.
+    Portability (str): Portability required by the user.
+    Multitasking (str): Multitasking capability required by the user.
+    Processing_speed (str): Processing speed required by the user.
+    Budget (int): Budget of the user.
+
+    Returns:
+    dict: A dictionary containing the extracted information.
+    """
+    return {
+        "GPU intensity": GPU_intensity,
+        "Display quality": Display_quality,
+        "Portability": Portability,
+        "Multitasking": Multitasking,
+        "Processing speed": Processing_speed,
+        "Budget": Budget
+    }
+
+def compare_laptops_with_user(user_requirements):
     laptop_df = pd.read_csv('updated_laptop.csv')
+    laptop_df['laptop_feature'] = laptop_df['Description'].apply(lambda x: product_map_layer(x))
 
-    response_dict_n = dictionary_present(user_req_string)
-    user_requirements = response_dict_n
+    # response_dict_n = dictionary_present(user_req_string)
+    # user_requirements = response_dict_n
 
-    budget = int(user_requirements.get('Budget', '0').replace(',', '').split()[0])
+    budget = int(user_requirements.get('Budget', '0'))
 
     filtered_laptops = laptop_df.copy()
     filtered_laptops['Price'] = filtered_laptops['Price'].str.replace(',', '').astype(int)
@@ -218,12 +280,11 @@ def compare_laptops_with_user(user_req_string):
 
     for index, row in filtered_laptops.iterrows():
         user_product_match_str = row['laptop_feature']
-        laptop_values = user_product_match_str
-        laptop_values = dictionary_present(user_product_match_str)
+        laptop_values = get_chat_completions_func_calling(user_product_match_str)
         score = 0
 
         for key, user_value in user_requirements.items():
-            if key == 'Budget':
+            if key.lower() == 'budget':
                 continue 
             laptop_value = laptop_values.get(key, None)
             laptop_mapping = mappings.get(laptop_value, -1)
@@ -272,3 +333,57 @@ def moderation_check(user_input):
         return "Flagged"
     else:
         return "Not Flagged"
+
+def product_map_layer(laptop_description):
+    delimiter = "#####"
+    lap_spec = "Laptop with (Type of the Graphics Processor) GPU intensity, (Display Type, Screen Resolution, Display Size) display quality, (Laptop Weight) portablity, (RAM Size) multi tasking, (CPU Type, Core, Clock Speed) processing speed"
+
+    values = {'low','medium','high'}
+
+    prompt=f"""
+    You are a Laptop Specifications Classifier whose job is to extract the key features of laptops and classify them as per their requirements.
+    To analyze each laptop, perform the following steps:
+    Step 1: Extract the laptop's primary features from the description {laptop_description}
+    Step 2: Store the extracted features in {lap_spec} \
+    Step 3: Classify each of the items in {lap_spec} into {values} based on the following rules: \
+    {delimiter}
+    GPU Intensity:
+    - low: <<< if GPU is entry-level such as an integrated graphics processor or entry-level dedicated graphics like Intel UHD >>> , \n
+    - medium: <<< if mid-range dedicated graphics like M1, AMD Radeon, Intel Iris >>> , \n
+    - high: <<< high-end dedicated graphics like Nvidia RTX >>> , \n
+
+    Display Quality:
+    - low: <<< if resolution is below Full HD (e.g., 1366x768). >>> , \n
+    - medium: <<< if Full HD resolution (1920x1080) or higher. >>> , \n
+    - high: <<< if High-resolution display (e.g., 4K, Retina) with excellent color accuracy and features like HDR support. >>> \n
+
+    Portability:
+    - high: <<< if laptop weight is less than 1.51 kg >>> , \n
+    - medium: <<< if laptop weight is between 1.51 kg and 2.51 kg >>> , \n
+    - low: <<< if laptop weight is greater than 2.51 kg >>> \n
+
+    Multitasking:
+    - low: <<< If RAM size is 8 GB, 12 GB >>> , \n
+    - medium: <<< if RAM size is 16 GB >>> , \n
+    - high: <<< if RAM size is 32 GB, 64 GB >>> \n
+
+    Processing Speed:
+    - low: <<< if entry-level processors like Intel Core i3, AMD Ryzen 3 >>> , \n
+    - medium: <<< if Mid-range processors like Intel Core i5, AMD Ryzen 5 >>> , \n
+    - high: <<< if High-performance processors like Intel Core i7, AMD Ryzen 7 or higher >>> \n
+    {delimiter}
+
+    {delimiter}
+    Here is input output pair for few-shot learning:
+    input 1: "The Dell Inspiron is a versatile laptop that combines powerful performance and affordability. It features an Intel Core i5 processor clocked at 2.4 GHz, ensuring smooth multitasking and efficient computing. With 8GB of RAM and an SSD, it offers quick data access and ample storage capacity. The laptop sports a vibrant 15.6" LCD display with a resolution of 1920x1080, delivering crisp visuals and immersive viewing experience. Weighing just 2.5 kg, it is highly portable, making it ideal for on-the-go usage. Additionally, it boasts an Intel UHD GPU for decent graphical performance and a backlit keyboard for enhanced typing convenience. With a one-year warranty and a battery life of up to 6 hours, the Dell Inspiron is a reliable companion for work or entertainment. All these features are packed at an affordable price of 35,000, making it an excellent choice for budget-conscious users."
+    output 1" "Laptop with medium GPU intensity, medium Dsiplay quality, medium Portability, high Multitaksing, medium Processing speed"
+    
+    {delimiter}
+    ### Strictly don't keep any other text in the values for the keys other than low or medium or high. Also return only the string and nothing else###
+    """
+    input = f"""Follow the above instructions step-by-step and output the string {lap_spec} for the following laptop {laptop_description}."""
+    #see that we are using the Completion endpoint and not the Chatcompletion endpoint
+    messages=[{"role": "system", "content":prompt },{"role": "user","content":input}]
+
+    response = get_chat_completions(messages)
+    return response

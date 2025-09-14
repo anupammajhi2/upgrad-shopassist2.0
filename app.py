@@ -1,5 +1,5 @@
 from flask import Flask, redirect, url_for, render_template, request
-from functions import initialize_conversation, get_chat_completions, moderation_check, intent_confirmation_layer, dictionary_present, compare_laptops_with_user, recommendation_validation, initialize_conv_reco
+from functions import initialize_conversation, get_chat_completions, moderation_check, intent_confirmation_layer, dictionary_present, compare_laptops_with_user, recommendation_validation, initialize_conv_reco, get_chat_completions_func_calling
 import openai
 
 app = Flask(__name__)
@@ -59,10 +59,10 @@ def conversation_route():
             conversation_bot.append({'bot': response_assistant})
         else:
             response = dictionary_present(response_assistant)
-            print("WAIT")
+            result = get_chat_completions_func_calling(response, True)
             # conversation_bot.append({'bot': "Thank you for providing all the information. Kindly wait, while I fetch the products: \n"})
 
-            top_3_laptops = compare_laptops_with_user(response)
+            top_3_laptops = compare_laptops_with_user(result)
 
             print("top 3 laptops are", top_3_laptops)
 
